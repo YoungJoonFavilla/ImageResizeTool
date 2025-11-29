@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>이미지 리사이즈</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      min-height: 100vh;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px;
+    }
+    h1 { margin-bottom: 10px; }
+    .subtitle { color: #888; margin-bottom: 30px; }
+    .drop-zone {
+      width: 100%;
+      max-width: 500px;
+      height: 200px;
+      border: 2px dashed #444;
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: #646cff;
+      background: rgba(100, 108, 255, 0.1);
+    }
+    .drop-zone-icon { font-size: 48px; margin-bottom: 10px; }
+    .drop-zone-text { color: #888; }
+    input[type="file"] { display: none; }
+    .size-input {
+      margin-top: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .size-input input {
+      width: 80px;
+      padding: 8px 12px;
+      border: 1px solid #444;
+      border-radius: 6px;
+      background: #2a2a3e;
+      color: #eee;
+      text-align: center;
+      font-size: 16px;
+    }
+    .result {
+      margin-top: 30px;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+    }
+    .result.show { display: flex; }
+    .preview {
+      max-width: 300px;
+      max-height: 300px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+    }
+    .download-btn {
+      padding: 12px 24px;
+      background: #646cff;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .download-btn:hover { background: #535bf2; }
+    .info { color: #888; font-size: 14px; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h1>이미지 리사이즈</h1>
+  <p class="subtitle">PNG 이미지를 원하는 크기로 변환</p>
+
+  <div class="drop-zone" id="dropZone">
+    <div class="drop-zone-icon">📁</div>
+    <div class="drop-zone-text">이미지를 드래그하거나 클릭해서 선택</div>
+  </div>
+  <input type="file" id="fileInput" accept="image/*">
+
+  <div class="size-input">
+    <input type="number" id="width" value="512" min="1">
+    <span>×</span>
+    <input type="number" id="height" value="512" min="1">
+    <span>px</span>
+  </div>
+
+  <div class="result" id="result">
+    <img class="preview" id="preview">
+    <button class="download-btn" id="downloadBtn">다운로드</button>
+    <div class="info" id="info"></div>
+  </div>
+
+  <script>
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const widthInput = document.getElementById('width');
+    const heightInput = document.getElementById('height');
+    const result = document.getElementById('result');
+    const preview = document.getElementById('preview');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const info = document.getElementById('info');
+
+    let resizedDataUrl = null;
+    let fileName = 'resized.png';
+
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('dragover');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('dragover');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (file) processFile(file);
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) processFile(file);
+    });
+
+    function processFile(file) {
+      if (!file.type.startsWith('image/')) {
+        alert('이미지 파일만 가능합니다');
+        return;
+      }
+
+      fileName = file.name.replace(/\.[^.]+$/, '') + '_resized.png';
+      const reader = new FileReader();
+
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => resizeImage(img);
+        img.src = e.target.result;
+      };
+
+      reader.readAsDataURL(file);
+    }
+
+    function resizeImage(img) {
+      const targetWidth = parseInt(widthInput.value) || 512;
+      const targetHeight = parseInt(heightInput.value) || 512;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+
+      resizedDataUrl = canvas.toDataURL('image/png');
+      preview.src = resizedDataUrl;
+      info.textContent = `${img.width}×${img.height} → ${targetWidth}×${targetHeight}`;
+      result.classList.add('show');
+    }
+
+    downloadBtn.addEventListener('click', () => {
+      if (!resizedDataUrl) return;
+      const a = document.createElement('a');
+      a.href = resizedDataUrl;
+      a.download = fileName;
+      a.click();
+    });
+
+    // 크기 변경시 재처리
+    [widthInput, heightInput].forEach(input => {
+      input.addEventListener('change', () => {
+        if (preview.src && preview.src !== location.href) {
+          const img = new Image();
+          img.onload = () => resizeImage(img);
+          img.src = preview.src;
+        }
+      });
+    });
+  </script>
+</body>
+</html>
