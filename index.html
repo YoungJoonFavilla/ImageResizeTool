@@ -55,42 +55,87 @@
       text-align: center;
       font-size: 16px;
     }
-    .result {
+    .results {
       margin-top: 30px;
       display: none;
       flex-direction: column;
       align-items: center;
+      width: 100%;
+      max-width: 600px;
     }
-    .result.show { display: flex; }
-    .preview {
-      max-width: 300px;
-      max-height: 300px;
-      border-radius: 8px;
+    .results.show { display: flex; }
+    .results-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
       margin-bottom: 15px;
     }
-    .download-btn {
-      padding: 12px 24px;
+    .results-count { color: #888; }
+    .download-all-btn {
+      padding: 10px 20px;
       background: #646cff;
       color: white;
       border: none;
       border-radius: 8px;
-      font-size: 16px;
+      font-size: 14px;
       cursor: pointer;
       transition: background 0.2s;
     }
-    .download-btn:hover { background: #535bf2; }
-    .info { color: #888; font-size: 14px; margin-top: 10px; }
+    .download-all-btn:hover { background: #535bf2; }
+    .image-list {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .image-item {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      background: #2a2a3e;
+      padding: 12px;
+      border-radius: 8px;
+    }
+    .image-item img {
+      width: 60px;
+      height: 60px;
+      object-fit: cover;
+      border-radius: 6px;
+    }
+    .image-item-info {
+      flex: 1;
+    }
+    .image-item-name {
+      font-size: 14px;
+      margin-bottom: 4px;
+      word-break: break-all;
+    }
+    .image-item-size {
+      font-size: 12px;
+      color: #888;
+    }
+    .image-item-download {
+      padding: 8px 16px;
+      background: #444;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .image-item-download:hover { background: #555; }
   </style>
 </head>
 <body>
   <h1>이미지 리사이즈</h1>
-  <p class="subtitle">PNG 이미지를 원하는 크기로 변환</p>
+  <p class="subtitle">여러 이미지를 한번에 원하는 크기로 변환</p>
 
   <div class="drop-zone" id="dropZone">
     <div class="drop-zone-icon">📁</div>
-    <div class="drop-zone-text">이미지를 드래그하거나 클릭해서 선택</div>
+    <div class="drop-zone-text">이미지를 드래그하거나 클릭해서 선택 (여러 개 가능)</div>
   </div>
-  <input type="file" id="fileInput" accept="image/*">
+  <input type="file" id="fileInput" accept="image/*" multiple>
 
   <div class="size-input">
     <input type="number" id="width" value="512" min="1">
@@ -99,10 +144,12 @@
     <span>px</span>
   </div>
 
-  <div class="result" id="result">
-    <img class="preview" id="preview">
-    <button class="download-btn" id="downloadBtn">다운로드</button>
-    <div class="info" id="info"></div>
+  <div class="results" id="results">
+    <div class="results-header">
+      <span class="results-count" id="resultsCount"></span>
+      <button class="download-all-btn" id="downloadAllBtn">전체 다운로드</button>
+    </div>
+    <div class="image-list" id="imageList"></div>
   </div>
 
   <script>
@@ -110,13 +157,12 @@
     const fileInput = document.getElementById('fileInput');
     const widthInput = document.getElementById('width');
     const heightInput = document.getElementById('height');
-    const result = document.getElementById('result');
-    const preview = document.getElementById('preview');
-    const downloadBtn = document.getElementById('downloadBtn');
-    const info = document.getElementById('info');
+    const results = document.getElementById('results');
+    const resultsCount = document.getElementById('resultsCount');
+    const imageList = document.getElementById('imageList');
+    const downloadAllBtn = document.getElementById('downloadAllBtn');
 
-    let resizedDataUrl = null;
-    let fileName = 'resized.png';
+    let processedImages = [];
 
     dropZone.addEventListener('click', () => fileInput.click());
 
@@ -132,34 +178,46 @@
     dropZone.addEventListener('drop', (e) => {
       e.preventDefault();
       dropZone.classList.remove('dragover');
-      const file = e.dataTransfer.files[0];
-      if (file) processFile(file);
+      const files = Array.from(e.dataTransfer.files);
+      processFiles(files);
     });
 
     fileInput.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (file) processFile(file);
+      const files = Array.from(e.target.files);
+      processFiles(files);
     });
 
-    function processFile(file) {
-      if (!file.type.startsWith('image/')) {
+    function processFiles(files) {
+      const imageFiles = files.filter(f => f.type.startsWith('image/'));
+      if (imageFiles.length === 0) {
         alert('이미지 파일만 가능합니다');
         return;
       }
 
-      fileName = file.name.replace(/\.[^.]+$/, '') + '_resized.png';
-      const reader = new FileReader();
+      processedImages = [];
+      imageList.innerHTML = '';
 
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => resizeImage(img);
-        img.src = e.target.result;
-      };
+      imageFiles.forEach((file, index) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            const result = resizeImage(img, file.name);
+            processedImages.push(result);
+            addImageItem(result, index);
 
-      reader.readAsDataURL(file);
+            if (processedImages.length === imageFiles.length) {
+              resultsCount.textContent = `${processedImages.length}개 이미지 변환 완료`;
+              results.classList.add('show');
+            }
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
     }
 
-    function resizeImage(img) {
+    function resizeImage(img, originalName) {
       const targetWidth = parseInt(widthInput.value) || 512;
       const targetHeight = parseInt(heightInput.value) || 512;
 
@@ -172,28 +230,45 @@
       ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
 
-      resizedDataUrl = canvas.toDataURL('image/png');
-      preview.src = resizedDataUrl;
-      info.textContent = `${img.width}×${img.height} → ${targetWidth}×${targetHeight}`;
-      result.classList.add('show');
+      const dataUrl = canvas.toDataURL('image/png');
+      const fileName = originalName.replace(/\.[^.]+$/, '') + '_resized.png';
+
+      return {
+        dataUrl,
+        fileName,
+        originalSize: `${img.width}×${img.height}`,
+        newSize: `${targetWidth}×${targetHeight}`
+      };
     }
 
-    downloadBtn.addEventListener('click', () => {
-      if (!resizedDataUrl) return;
-      const a = document.createElement('a');
-      a.href = resizedDataUrl;
-      a.download = fileName;
-      a.click();
-    });
+    function addImageItem(result, index) {
+      const item = document.createElement('div');
+      item.className = 'image-item';
+      item.innerHTML = `
+        <img src="${result.dataUrl}">
+        <div class="image-item-info">
+          <div class="image-item-name">${result.fileName}</div>
+          <div class="image-item-size">${result.originalSize} → ${result.newSize}</div>
+        </div>
+        <button class="image-item-download" data-index="${index}">다운로드</button>
+      `;
+      imageList.appendChild(item);
 
-    // 크기 변경시 재처리
-    [widthInput, heightInput].forEach(input => {
-      input.addEventListener('change', () => {
-        if (preview.src && preview.src !== location.href) {
-          const img = new Image();
-          img.onload = () => resizeImage(img);
-          img.src = preview.src;
-        }
+      item.querySelector('button').addEventListener('click', () => {
+        downloadImage(result);
+      });
+    }
+
+    function downloadImage(result) {
+      const a = document.createElement('a');
+      a.href = result.dataUrl;
+      a.download = result.fileName;
+      a.click();
+    }
+
+    downloadAllBtn.addEventListener('click', () => {
+      processedImages.forEach((result, i) => {
+        setTimeout(() => downloadImage(result), i * 100);
       });
     });
   </script>
